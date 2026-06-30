@@ -53,13 +53,17 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
 
         # Inner loop: run until end_turn
         while True:
-            response = CLIENT.messages.create(
-                model=MODEL,
-                max_tokens=4096,
-                system=assemble(active_skills),
-                tools=TOOL_SCHEMAS,
-                messages=messages,
-            )
+            try:
+                response = CLIENT.messages.create(
+                    model=MODEL,
+                    max_tokens=4096,
+                    system=assemble(active_skills),
+                    tools=TOOL_SCHEMAS,
+                    messages=messages,
+                )
+            except anthropic.APIError as exc:
+                print(error_line(f"API error: {exc}"))
+                break
 
             messages.append({"role": "assistant", "content": response.content})
 
@@ -92,8 +96,12 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
                             result   = {"error": f"Unknown tool: {tool_name}"}
                             is_error = True
                         else:
-                            result   = fn(**tool_input)
-                            is_error = "error" in result
+                            try:
+                                result   = fn(**tool_input)
+                                is_error = "error" in result
+                            except Exception as exc:
+                                result   = {"error": str(exc)}
+                                is_error = True
 
                     if is_error:
                         print(error_line(str(result.get("error", result))))
