@@ -63,6 +63,7 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
                 )
             except anthropic.APIError as exc:
                 print(error_line(f"API error: {exc}"))
+                messages.pop()
                 break
 
             messages.append({"role": "assistant", "content": response.content})
