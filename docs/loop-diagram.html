@@ -32,7 +32,7 @@
   .page {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 40px 20px 60px;
+    padding: 40px 20px 40px;
     overflow-x: auto;
   }
 
@@ -49,8 +49,8 @@
   .diagram {
     position: relative;
     width: 1000px;
-    height: 1160px;
-    margin: 40px 0 0;
+    height: 560px;
+    margin: 0;
   }
 
   .side-panel {
@@ -59,7 +59,7 @@
     align-self: flex-start;
     position: sticky;
     top: 24px;
-    margin-top: 40px;
+    margin-top: 0;
     background: var(--panel);
     border: 2px solid var(--border-idle);
     border-top: 4px solid var(--accent, var(--border-idle));
@@ -163,9 +163,9 @@
     display: flex;
     gap: 20px;
     flex-wrap: wrap;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-idle);
+    margin: 24px 0 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-idle);
     font-size: 0.82rem;
     color: var(--text-dim);
   }
@@ -205,6 +205,14 @@
     </p>
   </header>
 
+  <div class="legend">
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--io)"></span>Input/Output</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--hook)"></span>Hook</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--api)"></span>API</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--gate)"></span>Gate</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--tool)"></span>Tool</span>
+  </div>
+
   <div class="layout">
   <main class="diagram" id="diagram" role="img"
         aria-label="Animated diagram of the Zubo OS agent loop, cycling between the end_turn and tool_use branches">
@@ -224,40 +232,40 @@
       </defs>
     </svg>
 
-    <div class="stage stage--io" id="stage-user-input" style="top:40px; left:350px;">User input</div>
+    <div class="stage stage--io" id="stage-user-input" style="top:30px; left:30px;">User input</div>
 
-    <div class="stage stage--hook" id="stage-userinput-hook" style="top:170px; left:350px;">
+    <div class="stage stage--hook" id="stage-userinput-hook" style="top:30px; left:350px;">
       UserInput hook
       <span class="stage-note">slash command detection, preprocessing</span>
     </div>
 
-    <div class="stage stage--api" id="stage-claude-api" style="top:300px; left:350px;">
+    <div class="stage stage--api" id="stage-claude-api" style="top:30px; left:670px;">
       Claude API (sync)
       <span class="stage-note">system prompt = base + skills + memory</span>
     </div>
 
-    <div class="branch-label" id="label-end-turn" style="top:430px; left:100px;">stop_reason: end_turn</div>
-    <div class="branch-label" id="label-tool-use" style="top:430px; left:600px;">stop_reason: tool_use</div>
+    <div class="branch-label" id="label-end-turn" style="top:118px; left:30px;">stop_reason: end_turn</div>
+    <div class="branch-label" id="label-tool-use" style="top:118px; left:670px;">stop_reason: tool_use</div>
 
-    <div class="stage stage--io" id="stage-print-response" style="top:470px; left:100px;">print response</div>
+    <div class="stage stage--io" id="stage-print-response" style="top:170px; left:30px;">print response</div>
 
-    <div class="stage stage--hook" id="stage-pretooluse-hook" style="top:470px; left:600px;">
+    <div class="stage stage--hook" id="stage-pretooluse-hook" style="top:170px; left:670px;">
       PreToolUse hook
       <span class="stage-note">validate, log</span>
     </div>
-    <div class="stage stage--gate" id="stage-permission-gate" style="top:600px; left:600px;">
+    <div class="stage stage--gate" id="stage-permission-gate" style="top:170px; left:350px;">
       Permission gate
       <span class="stage-note">default / auto / plan</span>
     </div>
-    <div class="stage stage--tool" id="stage-tool-execution" style="top:730px; left:600px;">
+    <div class="stage stage--tool" id="stage-tool-execution" style="top:310px; left:350px;">
       Tool execution
       <span class="stage-note">dispatch dict &rarr; Python fn</span>
     </div>
-    <div class="stage stage--hook" id="stage-posttooluse-hook" style="top:860px; left:600px;">
+    <div class="stage stage--hook" id="stage-posttooluse-hook" style="top:310px; left:670px;">
       PostToolUse hook
       <span class="stage-note">audit, cache</span>
     </div>
-    <div class="stage stage--io" id="stage-append-result" style="top:990px; left:600px;">
+    <div class="stage stage--io" id="stage-append-result" style="top:450px; left:670px;">
       Append tool_result to messages
     </div>
   </main>
@@ -269,31 +277,23 @@
     <div class="side-panel-file" id="panel-file"></div>
   </aside>
   </div>
-
-  <div class="legend">
-    <span class="legend-item"><span class="legend-swatch" style="background:var(--io)"></span>Input/Output</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:var(--hook)"></span>Hook</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:var(--api)"></span>API</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:var(--gate)"></span>Gate</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:var(--tool)"></span>Tool</span>
-  </div>
 </div>
 
 <script>
 (function () {
   var CONNECTORS = [
-    { id: 'c1',  from: 'stage-user-input',      fromSide: 'bottom', to: 'stage-userinput-hook',   toSide: 'top',   shape: 'straight', accent: 'hook' },
-    { id: 'c2',  from: 'stage-userinput-hook',   fromSide: 'bottom', to: 'stage-claude-api',       toSide: 'top',   shape: 'straight', accent: 'api'  },
-    { id: 'c3',  from: 'stage-claude-api',       fromSide: 'bottom', to: 'stage-print-response',   toSide: 'top',   shape: 'diagonal', accent: 'io'   },
-    { id: 'c4',  from: 'stage-claude-api',       fromSide: 'bottom', to: 'stage-pretooluse-hook',  toSide: 'top',   shape: 'diagonal', accent: 'hook' },
-    { id: 'c5',  from: 'stage-pretooluse-hook',  fromSide: 'bottom', to: 'stage-permission-gate',  toSide: 'top',   shape: 'straight', accent: 'gate' },
+    { id: 'c1',  from: 'stage-user-input',      fromSide: 'right',  to: 'stage-userinput-hook',   toSide: 'left',  shape: 'straight', accent: 'hook' },
+    { id: 'c2',  from: 'stage-userinput-hook',   fromSide: 'right',  to: 'stage-claude-api',       toSide: 'left',  shape: 'straight', accent: 'api'  },
+    { id: 'c3',  from: 'stage-claude-api',       fromSide: 'left',   to: 'stage-print-response',   toSide: 'right', shape: 'diagonal', accent: 'io'   },
+    { id: 'c4',  from: 'stage-claude-api',       fromSide: 'bottom', to: 'stage-pretooluse-hook',  toSide: 'top',   shape: 'straight', accent: 'hook' },
+    { id: 'c5',  from: 'stage-pretooluse-hook',  fromSide: 'left',   to: 'stage-permission-gate',  toSide: 'right', shape: 'straight', accent: 'gate' },
     { id: 'c6',  from: 'stage-permission-gate',  fromSide: 'bottom', to: 'stage-tool-execution',   toSide: 'top',   shape: 'straight', accent: 'tool' },
-    { id: 'c7',  from: 'stage-tool-execution',   fromSide: 'bottom', to: 'stage-posttooluse-hook', toSide: 'top',   shape: 'straight', accent: 'hook' },
+    { id: 'c7',  from: 'stage-tool-execution',   fromSide: 'right',  to: 'stage-posttooluse-hook', toSide: 'left',  shape: 'straight', accent: 'hook' },
     { id: 'c8',  from: 'stage-posttooluse-hook', fromSide: 'bottom', to: 'stage-append-result',    toSide: 'top',   shape: 'straight', accent: 'io'   },
-    // Outer loop: routed through the left gutter, distinct from the inner loop below.
-    { id: 'c9',  from: 'stage-print-response',   fromSide: 'bottom', to: 'stage-user-input',       toSide: 'left',  shape: 'loop', gutter: 'left',  accent: 'io'  },
-    // Inner loop: routed through the right gutter, returns only to Claude API — never to User input.
-    { id: 'c10', from: 'stage-append-result',    fromSide: 'bottom', to: 'stage-claude-api',       toSide: 'right', shape: 'loop', gutter: 'right', accent: 'api' },
+    // Outer loop: short left-gutter bulge, both ends live in colA.
+    { id: 'c9',  from: 'stage-print-response',   fromSide: 'left',   to: 'stage-user-input',       toSide: 'left',  shape: 'loop', gutter: 'left',  accent: 'io'  },
+    // Inner loop: right-gutter bulge, clears the two colC boxes in between on the way back to Claude API.
+    { id: 'c10', from: 'stage-append-result',    fromSide: 'right',  to: 'stage-claude-api',       toSide: 'right', shape: 'loop', gutter: 'right', accent: 'api' },
   ];
 
   var PREFIX = [
@@ -411,8 +411,8 @@
   function initConnectors() {
     var containerRect = diagram.getBoundingClientRect();
     svg.setAttribute('viewBox', '0 0 ' + containerRect.width + ' ' + containerRect.height);
-    var gutterLeftX = 30;
-    var gutterRightX = containerRect.width - 30;
+    var gutterLeftX = 12;
+    var gutterRightX = containerRect.width - 12;
 
     CONNECTORS.forEach(function (conn) {
       var d = buildPath(conn, containerRect, gutterLeftX, gutterRightX);
