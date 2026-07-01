@@ -4,11 +4,12 @@ import sys
 from dotenv import load_dotenv
 import anthropic
 
-from tools       import TOOL_SCHEMAS, TOOL_DISPATCH
-from hooks       import HookRegistry, HookEvent
-from permissions import PermissionMode, gate
-from prompts     import assemble
-from output      import tool_line, error_line, response_line, info_line
+from tools         import TOOL_SCHEMAS
+from hooks          import HookRegistry, HookEvent
+from permissions    import PermissionMode
+from prompts        import assemble
+from output         import tool_line, error_line, response_line, info_line
+from tool_execution import execute_tool
 
 load_dotenv()
 
@@ -86,34 +87,16 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
 
                     print(tool_line(tool_name, **{k: str(v)[:60] for k, v in tool_input.items()}))
 
-                    hooks.run(HookEvent.PRE_TOOL_USE, {"tool": tool_name, "input": tool_input})
+                    outcome = execute_tool(tool_name, tool_input, hooks, mode)
 
-                    if not gate(tool_name, mode):
-                        result   = {"error": f"'{tool_name}' blocked by permission mode '{mode.value}'."}
-                        is_error = True
-                    else:
-                        fn = TOOL_DISPATCH.get(tool_name)
-                        if fn is None:
-                            result   = {"error": f"Unknown tool: {tool_name}"}
-                            is_error = True
-                        else:
-                            try:
-                                result   = fn(**tool_input)
-                                is_error = "error" in result
-                            except Exception as exc:
-                                result   = {"error": str(exc)}
-                                is_error = True
-
-                    if is_error:
-                        print(error_line(str(result.get("error", result))))
-
-                    hooks.run(HookEvent.POST_TOOL_USE, {"tool": tool_name, "result": result})
+                    if outcome.is_error:
+                        print(error_line(str(outcome.output.get("error", outcome.output))))
 
                     tool_results.append({
                         "type":        "tool_result",
                         "tool_use_id": block.id,
-                        "content":     str(result),
-                        "is_error":    is_error,
+                        "content":     str(outcome.output),
+                        "is_error":    outcome.is_error,
                     })
 
                 messages.append({"role": "user", "content": tool_results})
