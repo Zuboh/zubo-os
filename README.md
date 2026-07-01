@@ -4,9 +4,10 @@
 ![Tests](https://github.com/Zuboh/zubo-os/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A minimal personal AI agent built on the Claude API.
-Demonstrates the same architectural patterns as Claude Code:
-hook system, permission model, skill injection, context assembly.
+I wanted to know how Claude Code actually works, so I rebuilt its
+core loop by hand: hooks, permission gates, tool dispatch, context
+assembly. That's the deterministic part. The personality wasn't in
+the spec, it showed up anyway while I was building it.
 
 > "Only 1.6% of Claude Code is AI decision logic. The other 98.4% is deterministic infrastructure."
 > — [VILA-Lab analysis](https://github.com/VILA-Lab/Dive-into-Claude-Code)
