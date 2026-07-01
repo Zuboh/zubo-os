@@ -41,3 +41,37 @@ def test_memory_absent_when_missing(tmp_path, monkeypatch):
     monkeypatch.setattr("prompts.MEMORY_INDEX", tmp_path / "MEMORY.md")
     result = prompts.assemble()
     assert "Persistent Memory" not in result
+
+
+def test_persona_present():
+    result = prompts.assemble()
+    assert "direct and opinionated" in result
+
+
+def test_persona_present_even_without_memory(tmp_path, monkeypatch):
+    monkeypatch.setattr("prompts.MEMORY_INDEX", tmp_path / "MEMORY.md")
+    result = prompts.assemble()
+    assert "direct and opinionated" in result
+
+
+def test_persona_before_memory_section(tmp_path, monkeypatch):
+    memory_file = tmp_path / "MEMORY.md"
+    memory_file.write_text("- [test](test.md) — a test memory")
+    monkeypatch.setattr("prompts.MEMORY_INDEX", memory_file)
+    result = prompts.assemble()
+    assert result.index("direct and opinionated") < result.index("Persistent Memory")
+
+
+def test_persona_has_no_em_or_en_dash():
+    assert "—" not in prompts._PERSONA
+    assert "–" not in prompts._PERSONA
+
+
+def test_persona_language_instruction_present():
+    result = prompts.assemble()
+    assert "Default to Italian" in result
+
+
+def test_persona_humor_guardrail_present():
+    result = prompts.assemble()
+    assert "A missed joke beats a forced one" in result
