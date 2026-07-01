@@ -5,5 +5,5 @@ A personal CLI agent that mirrors Claude Code's internals — hook system, permi
 ## Language
 
 **Tool execution**:
-One dispatch → hook sequencing → error classification cycle for a single tool call, from the moment the model requests a tool to the moment its result is appended to the conversation. Lives in `tool_execution.py`.
+One PRE_TOOL_USE hook → permission gate → dispatch → error classification → POST_TOOL_USE hook cycle for a single tool call, from the moment the model requests a tool to the moment its result is appended to the conversation. Lives in `tool_execution.py`.
 _Avoid_: tool turn, tool call handling.

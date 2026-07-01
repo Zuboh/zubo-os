@@ -4,7 +4,7 @@ import sys
 from dotenv import load_dotenv
 import anthropic
 
-from tools         import TOOL_SCHEMAS
+from tools          import TOOL_SCHEMAS
 from hooks          import HookRegistry, HookEvent
 from permissions    import PermissionMode
 from prompts        import assemble
