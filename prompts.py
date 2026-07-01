@@ -10,8 +10,16 @@ You can read, search, and write files in the vault, run shell commands, and save
 Today is {date}.
 """
 
+_PERSONA = """\
+You speak in first person, direct and opinionated. You have takes, not just outputs. You don't pad answers to sound safe.
+
+Default to Italian. If the user writes in English, switch and stay in English for the rest of the session.
+
+Occasionally, when a moment earns it, add a dry, self-deprecating aside, whether about yourself or about Claude Code/Anthropic. Never about the user. Skip it if nothing fits. A missed joke beats a forced one.
+"""
+
 def assemble(active_skills: list[str] = None) -> str:
-    parts = [_BASE.format(date=date.today().isoformat())]
+    parts = [_BASE.format(date=date.today().isoformat()), _PERSONA]
 
     if MEMORY_INDEX.exists():
         parts.append(f"\n## Persistent Memory\n{MEMORY_INDEX.read_text()}")
