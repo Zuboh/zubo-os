@@ -42,6 +42,10 @@ python agent.py plan      # no tool execution (analysis only)
 See [docs/architecture.md](docs/architecture.md) for deep technical breakdown,
 loop diagram, and comparison with Claude Code internals.
 
+Prefer something visual? [Open the animated loop diagram](docs/loop-diagram.html)
+to watch the agent loop cycle through both branches (`end_turn` / `tool_use`)
+in your browser.
+
 ## Inspired by
 
 - [Andrej Karpathy — LLM OS](https://x.com/karpathy/status/1723140519554191579)

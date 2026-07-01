@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zubo OS — Agent Loop</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border-idle: #30363d;
+    --arrowhead: #8b949e;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --io: #38bdf8;
+    --hook: #f59e0b;
+    --api: #a78bfa;
+    --gate: #f472b6;
+    --tool: #34d399;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 20px 60px;
+    overflow-x: auto;
+  }
+
+  header h1 { font-size: 1.4rem; margin: 0 0 6px; }
+  header .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0; max-width: 640px; }
+
+  .diagram {
+    position: relative;
+    width: 1000px;
+    height: 1160px;
+    margin: 40px auto 0;
+  }
+
+  .connectors-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .connector {
+    fill: none;
+    stroke: var(--border-idle);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+  }
+  .connector.drawn { stroke: var(--accent); filter: url(#glow); marker-end: url(#arrowhead); }
+
+  .pulse-dot { fill: var(--accent); opacity: 0; transition: opacity 0.15s ease; }
+  .pulse-dot.fired { opacity: 1; }
+
+  .stage {
+    position: absolute;
+    width: 300px;
+    background: var(--panel);
+    border: 2px solid var(--border-idle);
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+    transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
+  }
+  .stage .stage-note {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .stage.active {
+    transform: scale(1.045);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 22px 2px var(--accent);
+  }
+
+  .stage--io   { --accent: var(--io); }
+  .stage--hook { --accent: var(--hook); }
+  .stage--api  { --accent: var(--api); }
+  .stage--gate { --accent: var(--gate); }
+  .stage--tool { --accent: var(--tool); }
+
+  .branch-label {
+    position: absolute;
+    width: 300px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+  }
+  .branch-label.active { color: var(--text); text-shadow: 0 0 8px currentColor; }
+
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-idle);
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  @media (max-width: 640px) {
+    .page { padding: 24px 12px 40px; }
+    header h1 { font-size: 1.15rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .connector, .stage, .branch-label { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Zubo OS — Agent Loop</h1>
+    <p class="subtitle">
+      Autoplaying diagram of the agent's core loop. Cycles automatically,
+      alternating the <code>end_turn</code> and <code>tool_use</code>
+      branches — same stages as <a href="architecture.md" style="color:inherit">docs/architecture.md</a>.
+    </p>
+  </header>
+
+  <main class="diagram" id="diagram" role="img"
+        aria-label="Animated diagram of the Zubo OS agent loop, cycling between the end_turn and tool_use branches">
+    <svg class="connectors-layer" id="connectors">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--arrowhead)"></path>
+        </marker>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur>
+          <feMerge>
+            <feMergeNode in="blur"></feMergeNode>
+            <feMergeNode in="SourceGraphic"></feMergeNode>
+          </feMerge>
+        </filter>
+      </defs>
+    </svg>
+
+    <div class="stage stage--io" id="stage-user-input" style="top:40px; left:350px;">User input</div>
+
+    <div class="stage stage--hook" id="stage-userinput-hook" style="top:170px; left:350px;">
+      UserInput hook
+      <span class="stage-note">slash command detection, preprocessing</span>
+    </div>
+
+    <div class="stage stage--api" id="stage-claude-api" style="top:300px; left:350px;">
+      Claude API (sync)
+      <span class="stage-note">system prompt = base + skills + memory</span>
+    </div>
+
+    <div class="branch-label" id="label-end-turn" style="top:430px; left:100px;">stop_reason: end_turn</div>
+    <div class="branch-label" id="label-tool-use" style="top:430px; left:600px;">stop_reason: tool_use</div>
+
+    <div class="stage stage--io" id="stage-print-response" style="top:470px; left:100px;">print response</div>
+
+    <div class="stage stage--hook" id="stage-pretooluse-hook" style="top:470px; left:600px;">
+      PreToolUse hook
+      <span class="stage-note">validate, log</span>
+    </div>
+    <div class="stage stage--gate" id="stage-permission-gate" style="top:600px; left:600px;">
+      Permission gate
+      <span class="stage-note">default / auto / plan</span>
+    </div>
+    <div class="stage stage--tool" id="stage-tool-execution" style="top:730px; left:600px;">
+      Tool execution
+      <span class="stage-note">dispatch dict &rarr; Python fn</span>
+    </div>
+    <div class="stage stage--hook" id="stage-posttooluse-hook" style="top:860px; left:600px;">
+      PostToolUse hook
+      <span class="stage-note">audit, cache</span>
+    </div>
+    <div class="stage stage--io" id="stage-append-result" style="top:990px; left:600px;">
+      Append tool_result to messages
+    </div>
+  </main>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--io)"></span>Input/Output</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--hook)"></span>Hook</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--api)"></span>API</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--gate)"></span>Gate</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:var(--tool)"></span>Tool</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var CONNECTORS = [
+    { id: 'c1',  from: 'stage-user-input',      fromSide: 'bottom', to: 'stage-userinput-hook',   toSide: 'top',   shape: 'straight', accent: 'hook' },
+    { id: 'c2',  from: 'stage-userinput-hook',   fromSide: 'bottom', to: 'stage-claude-api',       toSide: 'top',   shape: 'straight', accent: 'api'  },
+    { id: 'c3',  from: 'stage-claude-api',       fromSide: 'bottom', to: 'stage-print-response',   toSide: 'top',   shape: 'diagonal', accent: 'io'   },
+    { id: 'c4',  from: 'stage-claude-api',       fromSide: 'bottom', to: 'stage-pretooluse-hook',  toSide: 'top',   shape: 'diagonal', accent: 'hook' },
+    { id: 'c5',  from: 'stage-pretooluse-hook',  fromSide: 'bottom', to: 'stage-permission-gate',  toSide: 'top',   shape: 'straight', accent: 'gate' },
+    { id: 'c6',  from: 'stage-permission-gate',  fromSide: 'bottom', to: 'stage-tool-execution',   toSide: 'top',   shape: 'straight', accent: 'tool' },
+    { id: 'c7',  from: 'stage-tool-execution',   fromSide: 'bottom', to: 'stage-posttooluse-hook', toSide: 'top',   shape: 'straight', accent: 'hook' },
+    { id: 'c8',  from: 'stage-posttooluse-hook', fromSide: 'bottom', to: 'stage-append-result',    toSide: 'top',   shape: 'straight', accent: 'io'   },
+    // Outer loop: routed through the left gutter, distinct from the inner loop below.
+    { id: 'c9',  from: 'stage-print-response',   fromSide: 'bottom', to: 'stage-user-input',       toSide: 'left',  shape: 'loop', gutter: 'left',  accent: 'io'  },
+    // Inner loop: routed through the right gutter, returns only to Claude API — never to User input.
+    { id: 'c10', from: 'stage-append-result',    fromSide: 'bottom', to: 'stage-claude-api',       toSide: 'right', shape: 'loop', gutter: 'right', accent: 'api' },
+  ];
+
+  var PREFIX = [
+    { stage: 'stage-user-input' },
+    { stage: 'stage-userinput-hook', arrow: 'c1' },
+    { stage: 'stage-claude-api',     arrow: 'c2' },
+  ];
+  var END_TURN_PATH = [
+    { stage: 'stage-print-response', arrow: 'c3', label: 'label-end-turn' },
+    { stage: 'stage-user-input',     arrow: 'c9' },
+  ];
+  var TOOL_USE_PATH = [
+    { stage: 'stage-pretooluse-hook',  arrow: 'c4', label: 'label-tool-use' },
+    { stage: 'stage-permission-gate',  arrow: 'c5' },
+    { stage: 'stage-tool-execution',   arrow: 'c6' },
+    { stage: 'stage-posttooluse-hook', arrow: 'c7' },
+    { stage: 'stage-append-result',    arrow: 'c8' },
+    { stage: 'stage-claude-api',       arrow: 'c10' },
+  ];
+
+  var diagram = document.getElementById('diagram');
+  var svg = document.getElementById('connectors');
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function anchor(elId, side, containerRect) {
+    var rect = document.getElementById(elId).getBoundingClientRect();
+    var x, y;
+    if (side === 'top')    { x = rect.left + rect.width / 2; y = rect.top; }
+    if (side === 'bottom') { x = rect.left + rect.width / 2; y = rect.bottom; }
+    if (side === 'left')   { x = rect.left; y = rect.top + rect.height / 2; }
+    if (side === 'right')  { x = rect.right; y = rect.top + rect.height / 2; }
+    return { x: x - containerRect.left, y: y - containerRect.top };
+  }
+
+  function buildPath(conn, containerRect, gutterLeftX, gutterRightX) {
+    var s = anchor(conn.from, conn.fromSide, containerRect);
+    var e = anchor(conn.to, conn.toSide, containerRect);
+    if (conn.shape === 'straight') {
+      return 'M ' + s.x + ' ' + s.y + ' L ' + e.x + ' ' + e.y;
+    }
+    if (conn.shape === 'diagonal') {
+      var midY = (s.y + e.y) / 2;
+      return 'M ' + s.x + ' ' + s.y + ' Q ' + s.x + ' ' + midY + ' ' + e.x + ' ' + e.y;
+    }
+    // loop: single cubic bezier bulging out to the gutter, entering the target from the side.
+    var gutterX = conn.gutter === 'left' ? gutterLeftX : gutterRightX;
+    return 'M ' + s.x + ' ' + s.y + ' C ' + gutterX + ' ' + s.y + ' ' + gutterX + ' ' + e.y + ' ' + e.x + ' ' + e.y;
+  }
+
+  var connectorEls = {};
+
+  function initConnectors() {
+    var containerRect = diagram.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + containerRect.width + ' ' + containerRect.height);
+    var gutterLeftX = 30;
+    var gutterRightX = containerRect.width - 30;
+
+    CONNECTORS.forEach(function (conn) {
+      var d = buildPath(conn, containerRect, gutterLeftX, gutterRightX);
+
+      var path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('id', conn.id);
+      path.setAttribute('d', d);
+      path.setAttribute('class', 'connector');
+      path.style.setProperty('--accent', 'var(--' + conn.accent + ')');
+      svg.appendChild(path);
+
+      var length = path.getTotalLength();
+      path.style.strokeDasharray = length;
+      path.style.strokeDashoffset = length;
+
+      var dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('r', '4');
+      dot.setAttribute('class', 'pulse-dot');
+      dot.style.setProperty('--accent', 'var(--' + conn.accent + ')');
+      var motion = document.createElementNS(SVG_NS, 'animateMotion');
+      motion.setAttribute('dur', '0.6s');
+      motion.setAttribute('begin', 'indefinite');
+      motion.setAttribute('fill', 'freeze');
+      var mpath = document.createElementNS(SVG_NS, 'mpath');
+      mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + conn.id);
+      mpath.setAttribute('href', '#' + conn.id);
+      motion.appendChild(mpath);
+      dot.appendChild(motion);
+      svg.appendChild(dot);
+
+      connectorEls[conn.id] = { path: path, length: length, dot: dot, motion: motion };
+    });
+  }
+
+  function resetCycleVisuals() {
+    document.querySelectorAll('.stage.active').forEach(function (el) { el.classList.remove('active'); });
+    document.querySelectorAll('.branch-label.active').forEach(function (el) { el.classList.remove('active'); });
+    Object.keys(connectorEls).forEach(function (id) {
+      var c = connectorEls[id];
+      c.path.classList.remove('drawn');
+      c.path.style.strokeDashoffset = c.length;
+      c.dot.classList.remove('fired');
+    });
+  }
+
+  function activateStage(step) {
+    document.querySelectorAll('.stage.active').forEach(function (el) { el.classList.remove('active'); });
+    document.getElementById(step.stage).classList.add('active');
+
+    if (step.arrow) {
+      var c = connectorEls[step.arrow];
+      c.path.classList.add('drawn');
+      c.path.style.strokeDashoffset = 0;
+      c.dot.classList.add('fired');
+      c.motion.beginElement();
+    }
+    if (step.label) {
+      document.getElementById('label-end-turn').classList.remove('active');
+      document.getElementById('label-tool-use').classList.remove('active');
+      document.getElementById(step.label).classList.add('active');
+    }
+  }
+
+  var cycleCount = 0, sequence = [], stepIndex = 0;
+
+  function buildCycle() {
+    cycleCount++;
+    // Odd cycles take the end_turn branch, even cycles take tool_use — so the
+    // diagram demonstrates both paths over time with zero user interaction.
+    var branch = (cycleCount % 2 === 1) ? END_TURN_PATH : TOOL_USE_PATH;
+    sequence = PREFIX.concat(branch);
+    stepIndex = 0;
+    resetCycleVisuals();
+  }
+
+  function advance() {
+    if (stepIndex >= sequence.length) buildCycle();
+    activateStage(sequence[stepIndex++]);
+  }
+
+  window.addEventListener('load', function () {
+    initConnectors();
+    buildCycle();
+    advance();
+    setInterval(advance, 1500);
+  });
+})();
+</script>
+</body>
+</html>
