@@ -96,7 +96,7 @@
     stroke: var(--border-idle);
     stroke-width: 2;
     stroke-linecap: round;
-    transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease, opacity 0.25s ease;
   }
   .connector.drawn { stroke: var(--accent); filter: url(#glow); marker-end: url(#arrowhead); }
 
@@ -111,7 +111,8 @@
     border-radius: 10px;
     padding: 12px 16px;
     text-align: center;
-    transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
+    cursor: default;
+    transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease, opacity 0.25s ease;
   }
   .stage .stage-note {
     display: block;
@@ -121,6 +122,15 @@
   }
   .stage.active {
     transform: scale(1.045);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 22px 2px var(--accent);
+  }
+  .stage:hover {
+    transform: scale(1.045);
+    border-color: var(--text);
+    box-shadow: 0 0 0 1px var(--text), 0 0 22px 2px var(--text);
+  }
+  .stage.active:hover {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent), 0 0 22px 2px var(--accent);
   }
@@ -139,9 +149,15 @@
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    transition: color 0.3s ease, text-shadow 0.3s ease;
+    transition: color 0.3s ease, text-shadow 0.3s ease, opacity 0.25s ease;
   }
   .branch-label.active { color: var(--text); text-shadow: 0 0 8px currentColor; }
+
+  .diagram:has(.stage:hover) .stage:not(:hover),
+  .diagram:has(.stage:hover) .connector,
+  .diagram:has(.stage:hover) .branch-label {
+    opacity: 0.35;
+  }
 
   .legend {
     display: flex;
@@ -302,10 +318,11 @@
   var svg = document.getElementById('connectors');
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
-  var sidePanel  = document.getElementById('side-panel');
-  var panelTitle = document.getElementById('panel-title');
-  var panelText  = document.getElementById('panel-text');
-  var panelFile  = document.getElementById('panel-file');
+  var sidePanel    = document.getElementById('side-panel');
+  var panelEyebrow = document.getElementById('panel-eyebrow');
+  var panelTitle   = document.getElementById('panel-title');
+  var panelText    = document.getElementById('panel-text');
+  var panelFile    = document.getElementById('panel-file');
 
   var STAGE_INFO = {
     'stage-user-input': {
@@ -441,9 +458,12 @@
     });
   }
 
+  var lastActiveStageId = null;
+
   function activateStage(step) {
     document.querySelectorAll('.stage.active').forEach(function (el) { el.classList.remove('active'); });
     document.getElementById(step.stage).classList.add('active');
+    lastActiveStageId = step.stage;
     updatePanel(step.stage);
 
     if (step.arrow) {
@@ -477,11 +497,29 @@
     activateStage(sequence[stepIndex++]);
   }
 
+  var intervalId = null;
+
+  function initHoverPause() {
+    document.querySelectorAll('.stage').forEach(function (el) {
+      el.addEventListener('mouseenter', function () {
+        clearInterval(intervalId);
+        panelEyebrow.textContent = 'Inspecting';
+        updatePanel(el.id);
+      });
+      el.addEventListener('mouseleave', function () {
+        panelEyebrow.textContent = 'Now playing';
+        updatePanel(lastActiveStageId);
+        intervalId = setInterval(advance, 1500);
+      });
+    });
+  }
+
   window.addEventListener('load', function () {
     initConnectors();
+    initHoverPause();
     buildCycle();
     advance();
-    setInterval(advance, 1500);
+    intervalId = setInterval(advance, 1500);
   });
 })();
 </script>
