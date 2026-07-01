@@ -30,7 +30,7 @@
   }
 
   .page {
-    max-width: 1080px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 40px 20px 60px;
     overflow-x: auto;
@@ -39,11 +39,48 @@
   header h1 { font-size: 1.4rem; margin: 0 0 6px; }
   header .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0; max-width: 640px; }
 
+  .layout {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 20px;
+  }
+
   .diagram {
     position: relative;
     width: 1000px;
     height: 1160px;
-    margin: 40px auto 0;
+    margin: 40px 0 0;
+  }
+
+  .side-panel {
+    width: 340px;
+    flex: 0 0 340px;
+    align-self: flex-start;
+    position: sticky;
+    top: 24px;
+    margin-top: 40px;
+    background: var(--panel);
+    border: 2px solid var(--border-idle);
+    border-top: 4px solid var(--accent, var(--border-idle));
+    border-radius: 10px;
+    padding: 20px 22px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .side-panel-eyebrow {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent, var(--text-dim));
+    margin: 0 0 8px;
+  }
+  .side-panel-title { font-size: 1.15rem; margin: 0 0 10px; color: var(--text); }
+  .side-panel-text { font-size: 0.88rem; line-height: 1.55; color: var(--text-dim); margin: 0 0 16px; }
+  .side-panel-file {
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border-idle);
+    padding-top: 10px;
   }
 
   .connectors-layer {
@@ -119,13 +156,25 @@
   .legend-item { display: flex; align-items: center; gap: 8px; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
+  @media (max-width: 1180px) {
+    .layout { flex-direction: column; align-items: stretch; }
+    .side-panel {
+      position: static;
+      top: auto;
+      width: 100%;
+      max-width: 560px;
+      margin: 24px auto 0;
+      flex: none;
+    }
+  }
+
   @media (max-width: 640px) {
     .page { padding: 24px 12px 40px; }
     header h1 { font-size: 1.15rem; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .connector, .stage, .branch-label { transition: none !important; }
+    .connector, .stage, .branch-label, .side-panel { transition: none !important; }
   }
 </style>
 </head>
@@ -140,6 +189,7 @@
     </p>
   </header>
 
+  <div class="layout">
   <main class="diagram" id="diagram" role="img"
         aria-label="Animated diagram of the Zubo OS agent loop, cycling between the end_turn and tool_use branches">
     <svg class="connectors-layer" id="connectors">
@@ -196,6 +246,14 @@
     </div>
   </main>
 
+  <aside class="side-panel" id="side-panel" aria-live="polite">
+    <div class="side-panel-eyebrow" id="panel-eyebrow">Now playing</div>
+    <h2 class="side-panel-title" id="panel-title"></h2>
+    <p class="side-panel-text" id="panel-text"></p>
+    <div class="side-panel-file" id="panel-file"></div>
+  </aside>
+  </div>
+
   <div class="legend">
     <span class="legend-item"><span class="legend-swatch" style="background:var(--io)"></span>Input/Output</span>
     <span class="legend-item"><span class="legend-swatch" style="background:var(--hook)"></span>Hook</span>
@@ -243,6 +301,68 @@
   var diagram = document.getElementById('diagram');
   var svg = document.getElementById('connectors');
   var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  var sidePanel  = document.getElementById('side-panel');
+  var panelTitle = document.getElementById('panel-title');
+  var panelText  = document.getElementById('panel-text');
+  var panelFile  = document.getElementById('panel-file');
+
+  var STAGE_INFO = {
+    'stage-user-input': {
+      accent: 'io', title: 'User input',
+      text: "The outer loop blocks on a single call to Python's built-in input(), reading one line from stdin at a time. Blank input is silently skipped back to the prompt, and typing exit or quit fires the Stop hook before breaking out of the loop entirely. No streaming, no multi-line editor — just a synchronous read, the simplest possible front door to the loop.",
+      file: 'agent.py — input("\\n> ")  [line 28]'
+    },
+    'stage-userinput-hook': {
+      accent: 'hook', title: 'UserInput hook',
+      text: "Before the raw text reaches Claude, it passes through the UserInput event on the HookRegistry — one of four lifecycle events (PreToolUse, PostToolUse, UserInput, Stop). Each registered hook receives a mutable HookContext and can rewrite ctx.data['input'] or return None to pass it through unchanged. Here that mechanism detects /skill-name slash commands and can preprocess the string before it becomes a message, keeping cross-cutting concerns out of agent.py's core loop.",
+      file: 'hooks.py — HookRegistry.run(HookEvent.USER_INPUT)'
+    },
+    'stage-claude-api': {
+      accent: 'api', title: 'Claude API (sync)',
+      text: "A single synchronous call to CLIENT.messages.create() — no streaming — sends the full messages history plus a system prompt assembled fresh on every turn from three layers: a base prompt, any active skills (loaded via /skill-name), and the memory index (MEMORY.md) if one exists. The call is wrapped in try/except anthropic.APIError; on failure the just-appended user turn is popped back off messages so the history never ends up with two consecutive user messages.",
+      file: 'agent.py — CLIENT.messages.create()  [lines 57-67]  /  prompts.py — assemble()'
+    },
+    'stage-print-response': {
+      accent: 'io', title: 'print response',
+      text: 'When the API responds with stop_reason == "end_turn", the loop is done for this turn: it iterates response.content and prints every block that carries a .text attribute, formatted through response_line(). No tool calls are pending, so control returns straight to the outer while True loop to block on the next input() call.',
+      file: 'agent.py — stop_reason == "end_turn"  [lines 71-75]'
+    },
+    'stage-pretooluse-hook': {
+      accent: 'hook', title: 'PreToolUse hook',
+      text: "Right before a requested tool actually runs, the loop fires the PreToolUse event with the tool name and its input dict as context data. Registered hooks here can validate arguments, log the call, or mutate the context, all without agent.py knowing any of those concerns exist. It's the same seam Claude Code uses to run its own pre-execution checks ahead of a tool call.",
+      file: 'hooks.py — HookEvent.PRE_TOOL_USE'
+    },
+    'stage-permission-gate': {
+      accent: 'gate', title: 'Permission gate',
+      text: 'gate(tool_name, mode) decides, synchronously, whether the tool is allowed to run at all. Three modes: plan blocks every tool outright (analysis-only), auto allows everything without asking, and the default mode only interrupts for the two guarded tools — bash and write_file — prompting [y/N] on stdin before proceeding. Everything else in default mode runs unprompted.',
+      file: 'permissions.py — gate()'
+    },
+    'stage-tool-execution': {
+      accent: 'tool', title: 'Tool execution',
+      text: 'The tool name is looked up in TOOL_DISPATCH, a plain dict built by tools/__init__.py from every tool module\'s schema plus function — file tools, bash, and the memory tools (write_memory/read_memory, backed by markdown files under memory/) all register the same way. Claude\'s input dict is unpacked directly into the matching Python function as keyword arguments (fn(**tool_input)), wrapped in try/except so a raised exception becomes a normal {"error": ...} result instead of crashing the loop.',
+      file: 'tools/__init__.py — TOOL_DISPATCH  /  tools/memory_tool.py'
+    },
+    'stage-posttooluse-hook': {
+      accent: 'hook', title: 'PostToolUse hook',
+      text: 'After the tool function returns (or raises), the PostToolUse event fires with the tool name and its result — success or error — as context data. This is the natural point for auditing, caching results, or triggering side effects based on what a tool actually did, again fully decoupled from the dispatch logic itself.',
+      file: 'hooks.py — HookEvent.POST_TOOL_USE'
+    },
+    'stage-append-result': {
+      accent: 'io', title: 'Append tool_result to messages',
+      text: 'Every tool call in the response collects into one tool_result dict (tool_use_id, stringified content, and an is_error flag), and once all of them are processed the whole batch is appended as a single {"role": "user", "content": tool_results} message. That message is what the next Claude API (sync) call in the inner loop reads. Nothing trims this list yet — there\'s a standing TODO in agent.py for summarization or a sliding window once messages grows unbounded.',
+      file: 'agent.py — messages.append(...)  [line 119, TODO at 120]'
+    }
+  };
+
+  function updatePanel(stageId) {
+    var info = STAGE_INFO[stageId];
+    if (!info) return;
+    sidePanel.style.setProperty('--accent', 'var(--' + info.accent + ')');
+    panelTitle.textContent = info.title;
+    panelText.textContent  = info.text;
+    panelFile.textContent  = info.file;
+  }
 
   function anchor(elId, side, containerRect) {
     var rect = document.getElementById(elId).getBoundingClientRect();
@@ -324,6 +444,7 @@
   function activateStage(step) {
     document.querySelectorAll('.stage.active').forEach(function (el) { el.classList.remove('active'); });
     document.getElementById(step.stage).classList.add('active');
+    updatePanel(step.stage);
 
     if (step.arrow) {
       var c = connectorEls[step.arrow];
