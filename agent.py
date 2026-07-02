@@ -7,9 +7,10 @@ import anthropic
 from tools          import TOOL_SCHEMAS
 from hooks          import HookRegistry, HookEvent
 from permissions    import PermissionMode
-from prompts        import assemble
+from prompts        import assemble_blocks
 from output         import tool_line, error_line, response_line, info_line
 from tool_execution import execute_tool
+from history        import collapse_stale_tool_results
 
 load_dotenv()
 
@@ -19,6 +20,8 @@ MODEL  = "claude-sonnet-4-6"
 def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
     hooks         = HookRegistry()
     messages      = []
+    message_turns = []
+    turn_counter  = 0
     active_skills = []
 
     print(info_line(f"Zubo OS  model={MODEL}  mode={mode.value}"))
@@ -50,24 +53,30 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
                 print(info_line(f"Skill '{skill_name}' already active."))
             continue
 
+        turn_counter += 1
         messages.append({"role": "user", "content": user_input})
+        message_turns.append(turn_counter)
 
         # Inner loop: run until end_turn
         while True:
+            collapse_stale_tool_results(messages, message_turns, turn_counter)
+
             try:
                 response = CLIENT.messages.create(
                     model=MODEL,
                     max_tokens=4096,
-                    system=assemble(active_skills),
+                    system=assemble_blocks(active_skills),
                     tools=TOOL_SCHEMAS,
                     messages=messages,
                 )
             except anthropic.APIError as exc:
                 print(error_line(f"API error: {exc}"))
                 messages.pop()
+                message_turns.pop()
                 break
 
             messages.append({"role": "assistant", "content": response.content})
+            message_turns.append(turn_counter)
 
             if response.stop_reason == "end_turn":
                 for block in response.content:
@@ -100,7 +109,7 @@ def run(mode: PermissionMode = PermissionMode.DEFAULT) -> None:
                     })
 
                 messages.append({"role": "user", "content": tool_results})
-                # TODO: context management (summarization / sliding window)
+                message_turns.append(turn_counter)
 
             else:
                 print(error_line(f"Unexpected stop_reason: {response.stop_reason}"))
